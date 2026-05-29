@@ -12,50 +12,67 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Engine
+        uses: actions/checkout@v4
       
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
       
-      - name: Parse command
+      - name: Parse Command via Orchestrator
         id: parse
-        run: |
-          COMMAND="${{ github.event.inputs.command }}"
-          echo "command=$COMMAND" >> $GITHUB_OUTPUT
-          
-          # Extract repo name and environment
-          if [[ "$COMMAND" =~ Deploy[[:space:]]+([a-z-]+) ]]; then
-            REPO="${BASH_REMATCH[1]}"
-            echo "repo=$REPO" >> $GITHUB_OUTPUT
-          fi
-          
-          if [[ "$COMMAND" =~ (production|staging) ]]; then
-            ENV="${BASH_REMATCH[1]}"
-            echo "env=$ENV" >> $GITHUB_OUTPUT
-          else
-            echo "env=production" >> $GITHUB_OUTPUT
-          fi
+        run: node engine/orchestrator.js "${{ github.event.inputs.command }}"
       
-      - name: Execute deploy
+      - name: Clone Target Repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "→ Cloning target repository: ${{ steps.parse.outputs.repo }}"
+          gh repo clone Garrettc123/${{ steps.parse.outputs.repo }} target-repo
+          
+      - name: Install Deployment CLIs
+        run: npm install -g @railway/cli vercel
+
+      - name: Execute Railway Deploy
+        if: steps.parse.outputs.platform == 'railway'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
         run: |
-          echo "🚀 Deploying ${{ steps.parse.outputs.repo }} to ${{ steps.parse.outputs.env }}"
+          echo "🚀 Deploying to Railway: ${{ steps.parse.outputs.env }}"
+          cd target-repo
           
-          # Simulate deploy (replace with real Railway/Vercel CLI when tokens exist)
-          if [ -n "$RAILWAY_TOKEN" ]; then
-            echo "✅ Railway token present — deploy would execute"
-          else
-            echo "⚠️  Railway token missing — simulation mode"
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "❌ RAILWAY_TOKEN missing."
+            exit 1
           fi
           
-          echo "✅ Deploy complete: ${{ steps.parse.outputs.repo }}"
-      
+          # Link and deploy using specific Service ID
+          railway link ${{ steps.parse.outputs.project_id }}
+          railway up --service ${{ steps.parse.outputs.service_id }} --environment ${{ steps.parse.outputs.env }} --detach
+
+      - name: Execute Vercel Deploy
+        if: steps.parse.outputs.platform == 'vercel'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
+        run: |
+          echo "🚀 Deploying to Vercel: ${{ steps.parse.outputs.env }}"
+          cd target-repo
+          
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "❌ VERCEL_TOKEN missing."
+            exit 1
+          fi
+          
+          if [ "${{ steps.parse.outputs.env }}" = "production" ]; then
+            vercel deploy --prod --token $VERCEL_TOKEN --yes
+          else
+            vercel deploy --token $VERCEL_TOKEN --yes
+          fi
+
       - name: Notify
         if: always()
         run: |
-          echo "📢 Notification: Deploy ${{ job.status }}"
+          echo "📢 Deployment process finished with status: ${{ job.status }}"

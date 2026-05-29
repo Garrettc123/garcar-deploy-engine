@@ -19,8 +19,8 @@ Enter plain English:
 
 ## Architecture
 
-- `registry/repos.json` — All deployable repos
-- `engine/` — Orchestration logic
-- `.github/workflows/` — GitHub Actions automation
+- `registry/repos.json` — All deployable repos, platforms, and target IDs.
+- `engine/` — Orchestration logic parser.
+- `.github/workflows/` — GitHub Actions automation.
 
-**No manual secrets required** — uses GitHub org secrets from existing repos.
+**No manual secrets required** — uses GitHub org secrets extracted from local environments.

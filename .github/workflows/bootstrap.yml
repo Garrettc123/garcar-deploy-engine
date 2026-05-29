@@ -22,9 +22,9 @@ jobs:
       
       - name: Test secret access
         env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          if [ -n "$LINEAR_API_KEY" ]; then
+          if [ -n "$RAILWAY_TOKEN" ]; then
             echo "✅ Secrets accessible"
           else
             echo "⚠️  No secrets found — add via GitHub Settings"

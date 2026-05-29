@@ -4,24 +4,31 @@
       "id": "garcar-payments",
       "tier": 1,
       "platform": "railway",
+      "project_id": "replace-with-railway-project-id",
+      "service_id": "replace-with-railway-service-id",
       "repo_url": "https://github.com/Garrettc123/garcar-payments"
     },
     {
       "id": "mars-api",
       "tier": 1,
       "platform": "railway",
+      "project_id": "replace-with-railway-project-id",
+      "service_id": "replace-with-railway-service-id",
       "repo_url": "https://github.com/Garrettc123/mars-api"
     },
     {
       "id": "revenue-intelligence-engine",
       "tier": 1,
       "platform": "vercel",
+      "project_id": "replace-with-vercel-project-id",
       "repo_url": "https://github.com/Garrettc123/revenue-intelligence-engine"
     },
     {
       "id": "titan-autonomous-business-empire",
       "tier": 1,
       "platform": "railway",
+      "project_id": "replace-with-railway-project-id",
+      "service_id": "replace-with-railway-service-id",
       "repo_url": "https://github.com/Garrettc123/TITAN-Autonomous-Business-Empire"
     }
   ]
