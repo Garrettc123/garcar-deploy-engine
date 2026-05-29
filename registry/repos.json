@@ -1,0 +1,28 @@
+{
+  "repos": [
+    {
+      "id": "garcar-payments",
+      "tier": 1,
+      "platform": "railway",
+      "repo_url": "https://github.com/Garrettc123/garcar-payments"
+    },
+    {
+      "id": "mars-api",
+      "tier": 1,
+      "platform": "railway",
+      "repo_url": "https://github.com/Garrettc123/mars-api"
+    },
+    {
+      "id": "revenue-intelligence-engine",
+      "tier": 1,
+      "platform": "vercel",
+      "repo_url": "https://github.com/Garrettc123/revenue-intelligence-engine"
+    },
+    {
+      "id": "titan-autonomous-business-empire",
+      "tier": 1,
+      "platform": "railway",
+      "repo_url": "https://github.com/Garrettc123/TITAN-Autonomous-Business-Empire"
+    }
+  ]
+}

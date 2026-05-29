@@ -1,0 +1,4 @@
+.env
+.vault.env
+*.log
+node_modules/

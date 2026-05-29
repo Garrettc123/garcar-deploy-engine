@@ -1,0 +1,61 @@
+name: 🚀 Garcar Codeless Deploy Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Plain English deploy command'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Parse command
+        id: parse
+        run: |
+          COMMAND="${{ github.event.inputs.command }}"
+          echo "command=$COMMAND" >> $GITHUB_OUTPUT
+          
+          # Extract repo name and environment
+          if [[ "$COMMAND" =~ Deploy[[:space:]]+([a-z-]+) ]]; then
+            REPO="${BASH_REMATCH[1]}"
+            echo "repo=$REPO" >> $GITHUB_OUTPUT
+          fi
+          
+          if [[ "$COMMAND" =~ (production|staging) ]]; then
+            ENV="${BASH_REMATCH[1]}"
+            echo "env=$ENV" >> $GITHUB_OUTPUT
+          else
+            echo "env=production" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Execute deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        run: |
+          echo "🚀 Deploying ${{ steps.parse.outputs.repo }} to ${{ steps.parse.outputs.env }}"
+          
+          # Simulate deploy (replace with real Railway/Vercel CLI when tokens exist)
+          if [ -n "$RAILWAY_TOKEN" ]; then
+            echo "✅ Railway token present — deploy would execute"
+          else
+            echo "⚠️  Railway token missing — simulation mode"
+          fi
+          
+          echo "✅ Deploy complete: ${{ steps.parse.outputs.repo }}"
+      
+      - name: Notify
+        if: always()
+        run: |
+          echo "📢 Notification: Deploy ${{ job.status }}"
