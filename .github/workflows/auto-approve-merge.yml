@@ -1,33 +1,21 @@
-name: Auto Approve & Merge
+name: Garcar PR Safety Gate
 
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-  workflow_run:
-    workflows: ["*"]
-    types: [completed]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
 
 jobs:
-  auto-approve-merge:
+  safety-gate:
     runs-on: ubuntu-latest
-    if: github.event.pull_request || github.event.workflow_run.conclusion == 'success'
     steps:
-      - name: Approve PR
-        uses: hmarr/auto-approve-action@v3
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Auto Merge PR
-        uses: pascalgn/automerge-action@v0.15.6
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MERGE_LABELS: ""
-          MERGE_METHOD: squash
-          MERGE_DELETE_BRANCH: true
-          UPDATE_METHOD: rebase
-          MERGE_COMMIT_MESSAGE: "auto"
-          MERGE_RETRY_SLEEP: 5000
+      - name: Validate repository state
+        run: |
+          set -euo pipefail
+          echo "PR #${{ github.event.pull_request.number }}"
+          echo "Head: ${{ github.event.pull_request.head.sha }}"
+          echo "Base: ${{ github.event.pull_request.base.sha }}"
+          echo "Automatic approval and merge are intentionally disabled for production safety."
