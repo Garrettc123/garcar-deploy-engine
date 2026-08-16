@@ -1,78 +1,106 @@
-name: 🚀 Garcar Codeless Deploy Engine
+name: Garcar Production Deploy
 
 on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'Plain English deploy command'
+        description: 'Deploy <registered-repo> to <staging|production>'
         required: true
         type: string
+      confirm_production:
+        description: 'Type DEPLOY-PRODUCTION for a production deployment'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: garcar-deploy-${{ inputs.command }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
 
 jobs:
-  deploy:
+  validate:
     runs-on: ubuntu-latest
+    outputs:
+      repo: ${{ steps.parse.outputs.repo }}
+      env: ${{ steps.parse.outputs.env }}
+      platform: ${{ steps.parse.outputs.platform }}
+      project_id: ${{ steps.parse.outputs.project_id }}
+      service_id: ${{ steps.parse.outputs.service_id }}
     steps:
-      - name: Checkout Engine
-        uses: actions/checkout@v4
-      
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      
-      - name: Parse Command via Orchestrator
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Validate command and registry
         id: parse
-        run: node engine/orchestrator.js "${{ github.event.inputs.command }}"
-      
-      - name: Clone Target Repository
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node engine/orchestrator.js "${{ inputs.command }}"
+      - name: Require explicit production confirmation
+        if: steps.parse.outputs.env == 'production' && inputs.confirm_production != 'DEPLOY-PRODUCTION'
         run: |
-          echo "→ Cloning target repository: ${{ steps.parse.outputs.repo }}"
-          gh repo clone Garrettc123/${{ steps.parse.outputs.repo }} target-repo
-          
-      - name: Install Deployment CLIs
-        run: npm install -g @railway/cli vercel
+          echo 'Production requires confirm_production=DEPLOY-PRODUCTION.'
+          exit 1
 
-      - name: Execute Railway Deploy
-        if: steps.parse.outputs.platform == 'railway'
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.validate.outputs.env }}
+    steps:
+      - name: Checkout deployment engine
+        uses: actions/checkout@v4
+
+      - name: Checkout target repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh repo clone "Garrettc123/${{ needs.validate.outputs.repo }}" target-repo
+
+      - name: Install pinned deployment CLIs
+        run: |
+          set -euo pipefail
+          npm install --global @railway/cli@4 vercel@48
+
+      - name: Deploy to Railway
+        if: needs.validate.outputs.platform == 'railway'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          PROJECT_ID: ${{ needs.validate.outputs.project_id }}
+          SERVICE_ID: ${{ needs.validate.outputs.service_id }}
+          TARGET_ENV: ${{ needs.validate.outputs.env }}
         run: |
-          echo "🚀 Deploying to Railway: ${{ steps.parse.outputs.env }}"
+          set -euo pipefail
+          test -n "$RAILWAY_TOKEN"
+          test -n "$PROJECT_ID"
+          test -n "$SERVICE_ID"
           cd target-repo
-          
-          if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "❌ RAILWAY_TOKEN missing."
-            exit 1
-          fi
-          
-          # Link and deploy using specific Service ID
-          railway link ${{ steps.parse.outputs.project_id }}
-          railway up --service ${{ steps.parse.outputs.service_id }} --environment ${{ steps.parse.outputs.env }} --detach
+          railway link "$PROJECT_ID"
+          railway up --service "$SERVICE_ID" --environment "$TARGET_ENV" --detach
 
-      - name: Execute Vercel Deploy
-        if: steps.parse.outputs.platform == 'vercel'
+      - name: Deploy to Vercel
+        if: needs.validate.outputs.platform == 'vercel'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ steps.parse.outputs.project_id }}
+          TARGET_ENV: ${{ needs.validate.outputs.env }}
         run: |
-          echo "🚀 Deploying to Vercel: ${{ steps.parse.outputs.env }}"
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
           cd target-repo
-          
-          if [ -z "$VERCEL_TOKEN" ]; then
-            echo "❌ VERCEL_TOKEN missing."
-            exit 1
-          fi
-          
-          if [ "${{ steps.parse.outputs.env }}" = "production" ]; then
-            vercel deploy --prod --token $VERCEL_TOKEN --yes
+          if [ "$TARGET_ENV" = 'production' ]; then
+            vercel deploy --prod --token "$VERCEL_TOKEN" --yes
           else
-            vercel deploy --token $VERCEL_TOKEN --yes
+            vercel deploy --token "$VERCEL_TOKEN" --yes
           fi
 
-      - name: Notify
+      - name: Deployment summary
         if: always()
         run: |
-          echo "📢 Deployment process finished with status: ${{ job.status }}"
+          echo "Repository: ${{ needs.validate.outputs.repo }}"
+          echo "Environment: ${{ needs.validate.outputs.env }}"
+          echo "Platform: ${{ needs.validate.outputs.platform }}"
+          echo "Result: ${{ job.status }}"
