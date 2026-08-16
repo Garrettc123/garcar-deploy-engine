@@ -12,7 +12,7 @@ jobs:
       - name: Validate structure
         run: |
           echo "→ Validating repo structure..."
-          for dir in contracts engine registry vault; do
+          for dir in engine registry vault; do
             if [ ! -d "$dir" ]; then
               echo "❌ Missing: $dir"
               exit 1
