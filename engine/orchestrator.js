@@ -1,42 +1,71 @@
 const fs = require('fs');
 
+const ALLOWED_ENVS = new Set(['staging', 'production']);
+const REPO_ID = /^[a-z0-9][a-z0-9-]*$/;
+
 function parseCommand(cmd) {
-  const match = cmd.match(/Deploy\s+([a-z-]+)(?:\s+to\s+(production|staging))?/i);
+  if (typeof cmd !== 'string' || cmd.length > 200) {
+    throw new Error('Invalid deploy command');
+  }
+
+  const match = cmd.trim().match(/^Deploy\s+([a-z0-9][a-z0-9-]*)(?:\s+to\s+(production|staging))?$/i);
   if (!match) throw new Error('Invalid command format. Expected: "Deploy <repo> to <env>"');
-  
-  return {
-    repo: match[1],
-    env: match[2] || 'production'
-  };
+
+  const repo = match[1].toLowerCase();
+  const env = (match[2] || 'production').toLowerCase();
+  if (!REPO_ID.test(repo) || !ALLOWED_ENVS.has(env)) throw new Error('Invalid repository or environment');
+
+  return { repo, env };
 }
 
 function getRepoConfig(repoId) {
-  // Read synchronously to ensure config exists before proceeding
   const registry = JSON.parse(fs.readFileSync('registry/repos.json', 'utf8'));
-  return registry.repos.find(r => r.id === repoId);
+  const config = registry.repos.find(r => r.id === repoId);
+  if (!config) return undefined;
+
+  const required = ['id', 'platform', 'repo_url'];
+  for (const key of required) {
+    if (!config[key] || typeof config[key] !== 'string') {
+      throw new Error(`Registry entry '${repoId}' is missing '${key}'`);
+    }
+  }
+
+  if (config.id !== repoId) throw new Error('Registry identity mismatch');
+  if (!['railway', 'vercel'].includes(config.platform)) {
+    throw new Error(`Unsupported deployment platform: ${config.platform}`);
+  }
+
+  for (const value of Object.values(config)) {
+    if (typeof value === 'string' && value.includes('replace-with-')) {
+      throw new Error(`Registry entry '${repoId}' contains an unresolved deployment placeholder`);
+    }
+  }
+
+  return config;
 }
 
-// Execute natively in GitHub Actions
 if (require.main === module) {
-  const cmd = process.argv[2];
-  if (!cmd) {
-    console.error('❌ No command provided');
+  try {
+    const parsed = parseCommand(process.argv[2]);
+    const config = getRepoConfig(parsed.repo);
+    if (!config) throw new Error(`Repository '${parsed.repo}' not found in registry/repos.json`);
+
+    const output = [
+      `repo=${parsed.repo}`,
+      `env=${parsed.env}`,
+      `platform=${config.platform}`,
+      `project_id=${config.project_id || ''}`,
+      `service_id=${config.service_id || ''}`,
+      `repo_url=${config.repo_url}`
+    ].join('\n') + '\n';
+
+    if (!process.env.GITHUB_OUTPUT) throw new Error('GITHUB_OUTPUT is not available');
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, output, { encoding: 'utf8' });
+    console.log(`Validated: ${parsed.repo} (${config.platform}) -> ${parsed.env}`);
+  } catch (error) {
+    console.error(`Deployment validation failed: ${error.message}`);
     process.exit(1);
   }
-
-  const parsed = parseCommand(cmd);
-  const config = getRepoConfig(parsed.repo);
-
-  if (!config) {
-    console.error(`❌ Repository '${parsed.repo}' not found in registry/repos.json`);
-    process.exit(1);
-  }
-
-  // Format outputs for GitHub Actions
-  const output = `repo=${parsed.repo}\nenv=${parsed.env}\nplatform=${config.platform}\nproject_id=${config.project_id || ''}\nservice_id=${config.service_id || ''}\n`;
-  
-  fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
-  console.log(`✅ Orchestrator parsed: ${parsed.repo} (${config.platform}) -> ${parsed.env}`);
 }
 
 module.exports = { parseCommand, getRepoConfig };
