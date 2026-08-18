@@ -14,7 +14,6 @@ create table if not exists customer_state (
 
 create or replace function update_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end; $$;
-
 drop trigger if exists customer_state_updated_at on customer_state;
 create trigger customer_state_updated_at before update on customer_state for each row execute function update_updated_at();
 
@@ -98,6 +97,20 @@ begin raise exception 'authenticated_events is immutable'; end; $$;
 drop trigger if exists authenticated_events_no_update on authenticated_events;
 create trigger authenticated_events_no_update before update or delete on authenticated_events for each row execute function prevent_event_mutation();
 
+create or replace function protect_session_identity() returns trigger language plpgsql as $$
+begin
+    if new.session_id <> old.session_id
+       or new.customer_id is distinct from old.customer_id
+       or new.originating_event_id <> old.originating_event_id
+       or new.agent_ids <> old.agent_ids
+       or new.world_state_hash <> old.world_state_hash then
+        raise exception 'immutable pipeline session identity changed';
+    end if;
+    return new;
+end; $$;
+drop trigger if exists pipeline_session_identity_protection on pipeline_sessions;
+create trigger pipeline_session_identity_protection before update on pipeline_sessions for each row execute function protect_session_identity();
+
 create or replace function open_pipeline_session(
     p_event_id text, p_event_type text, p_customer_id text, p_session_id text,
     p_agent_ids text[], p_world_state_hash text, p_expires_at timestamptz
@@ -121,3 +134,5 @@ begin
 
     return existing_session;
 end; $$;
+
+revoke all on function open_pipeline_session(text,text,text,text,text[],text,timestamptz) from public;
