@@ -1,7 +1,9 @@
 import hashlib
 import json
 
-from gateway.authority import AuthorityGate, TPA, VerdictCode
+import pytest
+
+from gateway.authority import AuthorityGate, PrivilegedExecutor, TPA, Verdict, VerdictCode
 
 
 class World:
@@ -18,22 +20,24 @@ class World:
         return self.record if customer_id == 'cust_1' else None
 
     def compute_hash(self, customer_id):
-        if self.get(customer_id) is None:
+        record = self.get(customer_id)
+        if record is None:
             return None
-        raw = json.dumps(self.record, sort_keys=True, separators=(',', ':')).encode()
+        raw = json.dumps(record, sort_keys=True, separators=(',', ':')).encode()
         return hashlib.sha256(raw).hexdigest()
 
 
 class Sessions:
-    def __init__(self, authenticated=True, registered=True):
+    def __init__(self, authenticated=True, registered=True, customer='cust_1'):
         self.authenticated = authenticated
         self.registered = registered
+        self.customer = customer
 
     def is_event_authenticated(self, event_id):
         return self.authenticated
 
     def get_customer_for_event(self, event_id):
-        return 'cust_1'
+        return self.customer
 
     def is_agent_registered(self, agent_id, session_id):
         return self.registered
@@ -73,27 +77,32 @@ def test_unregistered_agent_rejected():
     assert verdict.code is VerdictCode.IDENTITY_UNVERIFIED
 
 
-def test_scope_rejected():
+def test_inactive_customer_rejected():
     world = World()
     tpa = valid_tpa(world)
-    tpa = TPA(**{**tpa.__dict__, 'scope': {'environment': 'production'}})
+    world.record['status'] = 'suspended'
+    verdict = AuthorityGate(world, Sessions()).validate(tpa)
+    assert verdict.code is VerdictCode.SCOPE_EXCEEDED
+
+
+def test_starter_production_scope_rejected():
+    world = World()
     world.record['plan'] = 'starter'
+    tpa = TPA(**{**valid_tpa(world).__dict__, 'world_state_hash': world.compute_hash('cust_1')})
     verdict = AuthorityGate(world, Sessions()).validate(tpa)
     assert verdict.code is VerdictCode.SCOPE_EXCEEDED
 
 
 def test_destination_rejected():
     world = World()
-    tpa = valid_tpa(world)
-    tpa = TPA(**{**tpa.__dict__, 'destination': 'attacker.example'})
+    tpa = TPA(**{**valid_tpa(world).__dict__, 'destination': 'attacker.example'})
     verdict = AuthorityGate(world, Sessions()).validate(tpa)
     assert verdict.code is VerdictCode.DESTINATION_INVALID
 
 
 def test_confidence_rejected():
     world = World()
-    tpa = valid_tpa(world)
-    tpa = TPA(**{**tpa.__dict__, 'confidence': 0.50})
+    tpa = TPA(**{**valid_tpa(world).__dict__, 'confidence': 0.50})
     verdict = AuthorityGate(world, Sessions()).validate(tpa)
     assert verdict.code is VerdictCode.LOW_CONFIDENCE
 
@@ -101,6 +110,40 @@ def test_confidence_rejected():
 def test_stale_world_state_rejected():
     world = World()
     tpa = valid_tpa(world)
-    world.record['status'] = 'suspended'
+    world.record['contact_email'] = 'changed@example.com'
     verdict = AuthorityGate(world, Sessions()).validate(tpa)
     assert verdict.code is VerdictCode.STALE_WORLD_STATE
+
+
+def test_unknown_customer_rejected():
+    world = World()
+    verdict = AuthorityGate(world, Sessions(customer='missing')).validate(valid_tpa(world))
+    assert verdict.code is VerdictCode.SCOPE_EXCEEDED
+
+
+def test_privileged_executor_rejects_rejected_verdict():
+    class Provider:
+        def __init__(self):
+            self.called = False
+
+        def execute(self, tpa):
+            self.called = True
+
+    provider = Provider()
+    executor = PrivilegedExecutor(provider)
+    verdict = Verdict('act_1', 'REJECTED', VerdictCode.DESTINATION_INVALID, 'blocked', {}, {})
+
+    with pytest.raises(PermissionError):
+        executor.execute(verdict)
+
+    assert provider.called is False
+
+
+def test_privileged_executor_allows_authorized_verdict():
+    class Provider:
+        def execute(self, tpa):
+            return {'executed': True, 'action_id': tpa['action_id']}
+
+    executor = PrivilegedExecutor(Provider())
+    verdict = Verdict('act_1', 'AUTHORIZED', VerdictCode.AUTHORIZED, 'all checks passed', {}, {'action_id': 'act_1'})
+    assert executor.execute(verdict) == {'executed': True, 'action_id': 'act_1'}
