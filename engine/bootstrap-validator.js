@@ -42,7 +42,7 @@ function validateRegistry(registry) {
     const repoLabel = repo?.id || '<unknown>';
 
     for (const field of REQUIRED_BASE_FIELDS) {
-      if (repo?.[field] == null || typeof repo[field] !== 'string' || repo[field].trim() === '') {
+      if (repo?.[field] == null || typeof repo?.[field] !== 'string' || repo?.[field].trim() === '') {
         errors.push(`Registry entry '${repoLabel}' is missing '${field}'.`);
       }
     }
@@ -60,7 +60,7 @@ function validateRegistry(registry) {
 
     if (requiredPlatformFields) {
       for (const field of requiredPlatformFields) {
-        if (repo[field] == null || typeof repo[field] !== 'string' || repo[field].trim() === '') {
+        if (repo?.[field] == null || typeof repo?.[field] !== 'string' || repo?.[field].trim() === '') {
           errors.push(`Registry entry '${repoLabel}' is missing '${field}'.`);
         }
       }
@@ -102,8 +102,13 @@ function runChecks() {
     process.exit(1);
   }
 
-  console.log('✅ Autokey system complete: registry deployment keys are valid.');
-  console.log('✅ Auto secret system complete: required GitHub deploy secrets are available.');
+  if (registryErrors.length === 0) {
+    console.log('✅ Autokey system complete: registry deployment keys are valid.');
+  }
+
+  if (secretErrors.length === 0) {
+    console.log('✅ Auto secret system complete: required GitHub deploy secrets are available.');
+  }
 }
 
 if (require.main === module) {
