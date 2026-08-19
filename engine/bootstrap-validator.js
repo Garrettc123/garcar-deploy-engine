@@ -26,14 +26,13 @@ function validateRegistry(registry) {
     const repoLabel = repo?.id || '<unknown>';
 
     for (const field of REQUIRED_BASE_FIELDS) {
-      if (!repo?.[field] || typeof repo[field] !== 'string') {
+      if (repo?.[field] == null || typeof repo[field] !== 'string' || repo[field].trim() === '') {
         errors.push(`Registry entry '${repoLabel}' is missing '${field}'.`);
       }
     }
 
     if (typeof repo?.platform === 'string' && !REQUIRED_PLATFORM_FIELDS[repo.platform]) {
       errors.push(`Registry entry '${repoLabel}' has unsupported platform '${repo?.platform}'.`);
-      continue;
     }
 
     if (typeof repo?.repo_url === 'string' && !GITHUB_REPO_URL.test(repo.repo_url)) {
@@ -43,7 +42,7 @@ function validateRegistry(registry) {
     const requiredPlatformFields = REQUIRED_PLATFORM_FIELDS[repo.platform];
     if (requiredPlatformFields) {
       for (const field of requiredPlatformFields) {
-        if (!repo[field] || typeof repo[field] !== 'string') {
+        if (repo[field] == null || typeof repo[field] !== 'string' || repo[field].trim() === '') {
           errors.push(`Registry entry '${repoLabel}' is missing '${field}'.`);
         }
       }
