@@ -96,20 +96,20 @@ function runChecks() {
   const secretErrors = validateSecrets();
   const errors = [...registryErrors, ...secretErrors];
 
-  if (errors.length > 0) {
-    console.error('Bootstrap validation failed:');
-    for (const error of errors) {
-      console.error(`- ${error}`);
-    }
-    process.exit(1);
-  }
-
   if (registryErrors.length === 0) {
     console.log('✅ Autokey system complete: registry deployment keys are valid.');
   }
 
   if (secretErrors.length === 0) {
     console.log('✅ Auto secret system complete: required GitHub deploy secrets are available.');
+  }
+
+  if (errors.length > 0) {
+    console.error('Bootstrap validation failed:');
+    for (const error of errors) {
+      console.error(`- ${error}`);
+    }
+    process.exit(1);
   }
 }
 
