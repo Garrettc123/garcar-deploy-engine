@@ -36,7 +36,7 @@ function validateRegistry(registry) {
       continue;
     }
 
-    if (!GITHUB_REPO_URL.test(repo.repo_url)) {
+    if (typeof repo?.repo_url === 'string' && !GITHUB_REPO_URL.test(repo.repo_url)) {
       errors.push(`Registry entry '${repoLabel}' has an invalid repo_url.`);
     }
 

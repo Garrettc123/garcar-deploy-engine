@@ -9,7 +9,7 @@ This repo is self-activating. Just run:
 **GitHub Actions → 🏗️ Bootstrap Deploy Engine → Run workflow**
 
 Bootstrap now runs:
-- **Autokey system** — validates every registered deployment key in `/home/runner/work/garcar-deploy-engine/garcar-deploy-engine/registry/repos.json`
+- **Autokey system** — validates every registered deployment key in `registry/repos.json`
 - **Auto secret system** — verifies the required GitHub deploy secrets (`RAILWAY_TOKEN`, `VERCEL_TOKEN`)
 
 ## Deploy Commands
