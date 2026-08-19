@@ -13,6 +13,22 @@ function readRegistry(registryPath = path.join(__dirname, '..', 'registry', 'rep
   return JSON.parse(fs.readFileSync(registryPath, 'utf8'));
 }
 
+function containsPlaceholder(value) {
+  if (typeof value === 'string') {
+    return value.includes('replace-with-');
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(containsPlaceholder);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value).some(containsPlaceholder);
+  }
+
+  return false;
+}
+
 function validateRegistry(registry) {
   const errors = [];
   const repos = Array.isArray(registry?.repos) ? registry.repos : [];
@@ -49,7 +65,7 @@ function validateRegistry(registry) {
     }
 
     for (const [field, value] of Object.entries(repo)) {
-      if (typeof value === 'string' && value.includes('replace-with-')) {
+      if (containsPlaceholder(value)) {
         errors.push(`Registry entry '${repoLabel}' contains unresolved placeholder '${field}'.`);
       }
     }
@@ -65,7 +81,14 @@ function validateSecrets(env = process.env) {
 }
 
 function runChecks() {
-  const registryErrors = validateRegistry(readRegistry());
+  let registryErrors;
+
+  try {
+    registryErrors = validateRegistry(readRegistry());
+  } catch (error) {
+    registryErrors = [`Unable to read registry/repos.json: ${error.message}`];
+  }
+
   const secretErrors = validateSecrets();
   const errors = [...registryErrors, ...secretErrors];
 
@@ -88,6 +111,7 @@ if (require.main === module) {
 module.exports = {
   REQUIRED_SECRETS,
   readRegistry,
+  containsPlaceholder,
   runChecks,
   validateRegistry,
   validateSecrets
