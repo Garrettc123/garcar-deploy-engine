@@ -48,8 +48,8 @@ function validateRegistry(registry) {
       }
     }
 
-    const platform = typeof repo?.platform === 'string' ? repo.platform : null;
-    const requiredPlatformFields = platform ? REQUIRED_PLATFORM_FIELDS[platform] : undefined;
+    const platform = typeof repo?.platform === 'string' ? repo.platform : '';
+    const requiredPlatformFields = REQUIRED_PLATFORM_FIELDS[platform];
 
     if (platform && !requiredPlatformFields) {
       errors.push(`Registry entry '${repoLabel}' has unsupported platform '${repo?.platform}'.`);
@@ -104,8 +104,13 @@ function runChecks() {
     process.exit(1);
   }
 
-  console.log('✅ Autokey system complete: registry deployment keys are valid.');
-  console.log('✅ Auto secret system complete: required GitHub deploy secrets are available.');
+  if (registryErrors.length === 0) {
+    console.log('✅ Autokey system complete: registry deployment keys are valid.');
+  }
+
+  if (secretErrors.length === 0) {
+    console.log('✅ Auto secret system complete: required GitHub deploy secrets are available.');
+  }
 }
 
 if (require.main === module) {
