@@ -47,7 +47,10 @@ function validateRegistry(registry) {
       }
     }
 
-    if (typeof repo?.platform === 'string' && !REQUIRED_PLATFORM_FIELDS[repo.platform]) {
+    const platform = typeof repo?.platform === 'string' ? repo.platform : null;
+    const requiredPlatformFields = platform ? REQUIRED_PLATFORM_FIELDS[platform] : undefined;
+
+    if (platform && !requiredPlatformFields) {
       errors.push(`Registry entry '${repoLabel}' has unsupported platform '${repo?.platform}'.`);
     }
 
@@ -55,7 +58,6 @@ function validateRegistry(registry) {
       errors.push(`Registry entry '${repoLabel}' has an invalid repo_url.`);
     }
 
-    const requiredPlatformFields = REQUIRED_PLATFORM_FIELDS[repo.platform];
     if (requiredPlatformFields) {
       for (const field of requiredPlatformFields) {
         if (repo[field] == null || typeof repo[field] !== 'string' || repo[field].trim() === '') {
@@ -100,8 +102,8 @@ function runChecks() {
     process.exit(1);
   }
 
-  console.log('✅ Autokey system: registry deployment keys are valid.');
-  console.log('✅ Auto secret system: required GitHub deploy secrets are available.');
+  console.log('✅ Autokey system complete: registry deployment keys are valid.');
+  console.log('✅ Auto secret system complete: required GitHub deploy secrets are available.');
 }
 
 if (require.main === module) {
