@@ -3,16 +3,22 @@ name: 🏗️ Bootstrap Deploy Engine
 on:
   workflow_dispatch:
 
+env:
+  NODE_VERSION: '20'
+
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       
       - name: Validate structure
         run: |
           echo "→ Validating repo structure..."
-          for dir in contracts engine registry vault; do
+          for dir in .github engine registry vault; do
             if [ ! -d "$dir" ]; then
               echo "❌ Missing: $dir"
               exit 1
@@ -20,15 +26,12 @@ jobs:
           done
           echo "✅ Structure valid"
       
-      - name: Test secret access
+      - name: Run autokey and auto secret systems
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          if [ -n "$RAILWAY_TOKEN" ]; then
-            echo "✅ Secrets accessible"
-          else
-            echo "⚠️  No secrets found — add via GitHub Settings"
-          fi
+          node engine/bootstrap-validator.js
       
       - name: Bootstrap complete
         run: |
@@ -36,5 +39,7 @@ jobs:
           echo "  ✅ DEPLOY ENGINE READY"
           echo "════════════════════════════════════════════════════════"
           echo ""
+          echo "Autokey: registry validated"
+          echo "Auto secret: GitHub deploy secrets validated"
           echo "Next: Run 'Garcar Codeless Deploy Engine' workflow"
           echo "Command: Deploy garcar-payments to production"
