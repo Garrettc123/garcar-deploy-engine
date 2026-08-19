@@ -31,7 +31,7 @@ function validateRegistry(registry) {
       }
     }
 
-    if (!REQUIRED_PLATFORM_FIELDS[repo?.platform]) {
+    if (typeof repo?.platform === 'string' && !REQUIRED_PLATFORM_FIELDS[repo.platform]) {
       errors.push(`Registry entry '${repoLabel}' has unsupported platform '${repo?.platform}'.`);
       continue;
     }
@@ -58,7 +58,7 @@ function validateRegistry(registry) {
 
 function validateSecrets(env = process.env) {
   return REQUIRED_SECRETS
-    .filter((name) => !env[name] || typeof env[name] !== 'string' || env[name].trim() === '')
+    .filter((name) => env[name] == null || env[name].trim() === '')
     .map((name) => `Missing required GitHub secret '${name}'.`);
 }
 
