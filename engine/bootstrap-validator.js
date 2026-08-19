@@ -66,7 +66,7 @@ function validateRegistry(registry) {
       }
     }
 
-    for (const [field, value] of Object.entries(repo)) {
+    for (const [field, value] of Object.entries(repo || {})) {
       if (containsPlaceholder(value)) {
         errors.push(`Registry entry '${repoLabel}' contains unresolved placeholder '${field}'.`);
       }
