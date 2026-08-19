@@ -40,9 +40,12 @@ function validateRegistry(registry) {
       errors.push(`Registry entry '${repoLabel}' has an invalid repo_url.`);
     }
 
-    for (const field of REQUIRED_PLATFORM_FIELDS[repo.platform]) {
-      if (!repo[field] || typeof repo[field] !== 'string') {
-        errors.push(`Registry entry '${repoLabel}' is missing '${field}'.`);
+    const requiredPlatformFields = REQUIRED_PLATFORM_FIELDS[repo.platform];
+    if (requiredPlatformFields) {
+      for (const field of requiredPlatformFields) {
+        if (!repo[field] || typeof repo[field] !== 'string') {
+          errors.push(`Registry entry '${repoLabel}' is missing '${field}'.`);
+        }
       }
     }
 
