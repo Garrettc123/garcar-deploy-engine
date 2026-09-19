@@ -1,0 +1,76 @@
+name: CRF Telemetry Bridge
+
+on:
+  workflow_run:
+    workflows:
+      - "Authority Gateway Tests"
+      - "Garcar Production Deploy"
+      - "Garcar PR Safety Gate"
+      - "🏗️ Bootstrap Deploy Engine"
+    types: [completed]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  emit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint GitHub OIDC token
+        id: oidc
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        run: |
+          set -euo pipefail
+          response=$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=garcar-crf")
+          token=$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$response")
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Emit execution telemetry
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          SUPABASE_CRF_URL: "https://obxeatprctjwqbvlrhfx.supabase.co/functions/v1/crf-github-ingest"
+          TENANT_ID: "f5d93048-7984-432e-afdf-9f6a4cfe3012"
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          REPOSITORY: ${{ github.event.workflow_run.repository.full_name }}
+        run: |
+          set -euo pipefail
+          if [ "$CONCLUSION" = "failure" ]; then
+            SEVERITY="error"
+            EVENT_TYPE="github.workflow.failure"
+          elif [ "$CONCLUSION" = "cancelled" ]; then
+            SEVERITY="warning"
+            EVENT_TYPE="github.workflow.cancelled"
+          else
+            SEVERITY="info"
+            EVENT_TYPE="github.workflow.completed"
+          fi
+          FINGERPRINT="github:$REPOSITORY:$WORKFLOW_NAME:$CONCLUSION"
+          export SEVERITY EVENT_TYPE FINGERPRINT
+
+          payload=$(python - <<'PY'
+          import json, os
+          print(json.dumps({
+            "tenant_id": os.environ["TENANT_ID"],
+            "repository": os.environ["REPOSITORY"],
+            "event_type": os.environ["EVENT_TYPE"],
+            "severity": os.environ["SEVERITY"],
+            "fingerprint": os.environ["FINGERPRINT"],
+            "message": f"GitHub workflow {os.environ['WORKFLOW_NAME']} concluded {os.environ['CONCLUSION']}",
+            "conclusion": os.environ["CONCLUSION"],
+            "run_id": int(os.environ["RUN_ID"]),
+            "run_attempt": int(os.environ["RUN_ATTEMPT"]),
+            "sha": os.environ["SHA"],
+            "branch": os.environ["BRANCH"]
+          }))
+          PY
+          )
+
+          curl -fsS -X POST "$SUPABASE_CRF_URL"             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             -d "$payload"
