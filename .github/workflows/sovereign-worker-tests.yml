@@ -1,0 +1,38 @@
+name: Sovereign Staging Worker Tests
+
+on:
+  push:
+    paths:
+      - 'sovereign_worker/**'
+      - 'Dockerfile.sovereign'
+      - '.github/workflows/sovereign-worker-tests.yml'
+  pull_request:
+    paths:
+      - 'sovereign_worker/**'
+      - 'Dockerfile.sovereign'
+      - '.github/workflows/sovereign-worker-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate source syntax and executable hash
+        run: |
+          python -m py_compile sovereign_worker/worker.py
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          observed=hashlib.sha256(Path('sovereign_worker/worker.py').read_bytes()).hexdigest()
+          expected='022cd54722abdabe308fac71df0a9f77a18b5f34073bfd8f680e42dbb2e6eb1b'
+          assert observed == expected, f'source changed: {observed}'
+          PY
+      - name: Run staging worker security and evidence regression tests
+        run: python -m unittest discover -s sovereign_worker/tests -v
