@@ -104,3 +104,36 @@ def submit_authorized_diagnostic(authority_gate, tpa, config_path, dispatch_key:
     except (UnicodeError, ValueError) as exc:
         raise DiagnosticTransportError("Worker returned invalid JSON") from exc
     return verify_remote_receipt(envelope, decoded, receipt_key)
+
+
+def recover_remote_receipt(envelope: dict, receipt_key: bytes, worker_endpoint: str, *, timeout_seconds: int = 15) -> dict:
+    """Recover a signed result from an uncertain previous HTTP execution.
+
+    This never calls the execution endpoint. It needs the ORIGINAL signed
+    envelope, not a freshly issued directive. Missing receipt means UNKNOWN.
+    """
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 60:
+        raise DiagnosticTransportError("Invalid recovery timeout")
+    if not isinstance(envelope, dict) or not isinstance(envelope.get("payload"), dict):
+        raise DiagnosticTransportError("Original signed envelope required")
+    request = Request(validate_endpoint(worker_endpoint) + "/v1/diagnostics/receipt",
+                      method="POST", data=_canonical(envelope),
+                      headers={"Content-Type": "application/json"})
+    try:
+        with build_opener(NoRedirect()).open(request, timeout=timeout_seconds) as connection:
+            if connection.status != 200:
+                raise DiagnosticTransportError("Worker did not confirm prior receipt")
+            blob = connection.read(MAX_RESPONSE + 1)
+    except HTTPError as exc:
+        if exc.code == 404:
+            raise DiagnosticTransportError("Receipt unavailable; execution outcome unknown") from exc
+        raise DiagnosticTransportError(f"Recovery denied (HTTP {exc.code})") from exc
+    except (URLError, OSError, TimeoutError) as exc:
+        raise DiagnosticTransportError("Receipt recovery unavailable") from exc
+    if len(blob) > MAX_RESPONSE:
+        raise DiagnosticTransportError("Recovery response exceeds size limit")
+    try:
+        decoded = json.loads(blob.decode("utf-8"))
+    except (UnicodeError, ValueError) as exc:
+        raise DiagnosticTransportError("Worker returned invalid receipt JSON") from exc
+    return verify_remote_receipt(envelope, decoded, receipt_key)
