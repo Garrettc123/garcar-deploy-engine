@@ -83,3 +83,24 @@ The standalone v5 reference archive `sovereign_execution_engine_v5.zip` was gene
 4. Configure two independent signing keys through a secret manager, TLS-only ingress, and a live operator-authenticated AuthorityGate.
 5. Demonstrate remote restart/replay, receipt recovery and injected corruption handling, preserving signed evidence. Do not merge/deploy or enable payment/write tasks before release gates pass.
 
+
+
+## v6 local autonomous observer release — 2026-11-07
+
+**Verified artifact:** `sovereign_execution_engine_v6.zip`
+- Archive SHA-256: `58c0fec5c2144c573071d3a1bc7513a9d6bd2ce53750bc00c5861e9a8f29cdcd`
+- 28 source/config/test files plus `SHA256_MANIFEST.json`; every file digest was checked after clean extraction.
+- Clean-extraction regression suite: **82 tests passed** (Python 3.13.5).
+- One real local scheduled directive: `environment_check` succeeded (Python 3.13.5 and Git 2.47.3), signed execution receipt and audit chain verified. A second attempt was rate/interval-gated as not due.
+- Added `sovereign_autonomy.py`: observe-only headless scheduler, durable SQLite job reservations, hardcoded safe command list, hourly execution budget, circuit breaker, config drift freeze, no automatic replay after ambiguous failure.
+- Added `autonomy_plan.json`, non-root `Dockerfile.autonomy`, `AUTONOMY.md` and packaged independent regression workflow example.
+
+### Review and staging state (verified)
+
+The existing Railway `garcar-review-staging` still has 9 unrelated pending changes as of this update. Its `review-workspace-sandbox` service is deployed successfully, but **no Sovereign diagnostic worker or autonomy daemon is deployed there**. No new Railway billing resources or volumes were provisioned.
+
+**Source publication remains blocking:** the executable v6 runtime and new controller live in the downloadable archive, not on this GitHub PR. This PR contains gateway changes only. Do not merge a gateway expecting an absent worker or claim any connected autonomous business operation. Existing GitHub Actions workflows still lack passing independent CI evidence.
+
+### Next review requirements
+
+Publish the exact manifest-verified source files as normal, reviewable GitHub text files; run the independent workflow in a functioning runner; then obtain cost approval for a dedicated isolated Railway worker and mounted volume. Only after staging signature/replay/receipt verification should a separately authorized authenticated command-center integration be enabled. Payment, outreach, and production mutations remain approval-gated and disabled by this v6 controller.
