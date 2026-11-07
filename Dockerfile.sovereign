@@ -6,10 +6,8 @@ RUN apt-get update \
     && mkdir -p /app /data \
     && chown sovereign:sovereign /data
 WORKDIR /app
-COPY sovereign_worker/worker.py.gz.b64 /app/worker.py.gz.b64
-# Decode the embedded source and check its independently recorded release digest.
-RUN python -c "import base64,gzip,hashlib,pathlib; p=pathlib.Path('/app/worker.py.gz.b64'); data=gzip.decompress(base64.b64decode(p.read_text().strip())); expected='c775e875d25d33741896d8ac0de9eb4acab0cc422411489c8a3327c66b26810b'; assert hashlib.sha256(data).hexdigest()==expected, 'source digest mismatch'; pathlib.Path('/app/worker.py').write_bytes(data)" \
-    && rm -f /app/worker.py.gz.b64
+COPY sovereign_worker/worker.py /app/worker.py
+RUN python -c "import hashlib,pathlib; p=pathlib.Path('/app/worker.py'); assert hashlib.sha256(p.read_bytes()).hexdigest()=='022cd54722abdabe308fac71df0a9f77a18b5f34073bfd8f680e42dbb2e6eb1b', 'worker source digest mismatch'"
 USER sovereign
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 CMD ["python", "-u", "/app/worker.py"]
