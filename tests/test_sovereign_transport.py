@@ -43,7 +43,7 @@ def make_result(envelope):
         "version": 1, "directive_id": p["directive_id"], "directive_sha256": _sha(p),
         "issued_at": int(time.time()), "receipt": receipt,
     }
-    signature = hmac.new(RECEIPT_KEY, b"sovereign-receipt-v1\\0" + _canonical(report),
+    signature = hmac.new(RECEIPT_KEY, (b"sovereign-receipt-v1" + bytes([0])) + _canonical(report),
                          hashlib.sha256).hexdigest()
     return {"report": report, "signature": signature}
 
