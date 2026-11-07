@@ -117,6 +117,47 @@ def connect_db():
     return db
 
 
+def verify_evidence(db, audit_count):
+    """Cross-check every completed SQLite run against an intact audit entry.
+
+    An audit hash chain by itself cannot detect removal of the entire file.
+    The independent SQLite ledger and the latest report must agree with it.
+    """
+    rows = db.execute('SELECT run_id, status, receipt_sha256 FROM runs').fetchall()
+    if len(rows) > 1000:
+        raise RuntimeError('Run ledger exceeds supported limit')
+    if any(status not in ('succeeded', 'reserved') for _, status, _ in rows):
+        raise RuntimeError('Run ledger contains invalid status')
+    if any(status == 'reserved' for _, status, _ in rows):
+        raise RuntimeError('Interrupted execution requires operator reconciliation')
+    completed = {run_id: receipt for run_id, _, receipt in rows}
+    if len(completed) != audit_count:
+        raise RuntimeError('Audit and SQLite run count disagree: halt autonomous execution')
+    if not audit_count:
+        if REPORT.exists():
+            raise RuntimeError('Untracked report exists without audit evidence')
+        return
+    if not REPORT.exists() or not AUDIT.exists():
+        raise RuntimeError('Audit or latest report missing after previous execution')
+    latest_entry = None
+    with AUDIT.open(encoding='utf-8') as inp:
+        for raw in inp:
+            entry = json.loads(raw)
+            if (entry.get('task') != 'environment_report' or
+                    entry.get('state') != 'succeeded' or
+                    entry.get('run_id') not in completed):
+                raise RuntimeError('Audit entry lacks a matching completed run')
+            receipt = {'run_id': entry['run_id'], 'state': 'succeeded',
+                       'audit_sha256': entry['entry_sha256']}
+            if completed[entry['run_id']] != sha(receipt):
+                raise RuntimeError('Audit receipt does not match SQLite ledger')
+            latest_entry = entry
+    report = json.loads(REPORT.read_text(encoding='utf-8'))
+    if (report.get('run_id') != latest_entry['run_id'] or
+            sha(report) != latest_entry['report_sha256']):
+        raise RuntimeError('Latest report does not match audit evidence')
+
+
 def safe_write(path, data):
     temp = path.with_name('.' + path.name + '-' + uuid.uuid4().hex)
     try:
@@ -146,11 +187,12 @@ def observed_report(run_id):
 
 def cycle():
     verify_volume()
-    previous, _ = verify_audit()
+    previous, audit_count = verify_audit()
     grant = verify_grant()
     with connect_db() as db:
         db.execute('BEGIN IMMEDIATE')
         try:
+            verify_evidence(db, audit_count)
             rows = db.execute('SELECT created_at, status FROM runs ORDER BY created_at DESC LIMIT 1000').fetchall()
             if any(status == 'reserved' for _, status in rows):
                 raise RuntimeError('Interrupted execution requires operator reconciliation')
