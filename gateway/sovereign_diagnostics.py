@@ -23,13 +23,13 @@ def _sha(value):
     return hashlib.sha256(_canonical(value)).hexdigest()
 
 
-def issue_signed_diagnostic(authority_gate, tpa, config_path: str | Path, signing_key: bytes) -> dict:
+def issue_signed_diagnostic(authority_gate, tpa, config_path: str | Path, signing_key: bytes, *, transport_scope: str = "local") -> dict:
     """Produce dispatcher-compatible signed envelope; does not execute anything."""
     if getattr(tpa, "action_class", None) != "SOVEREIGN_DIAGNOSTIC":
         raise PermissionError("Only SOVEREIGN_DIAGNOSTIC is supported")
     scope = getattr(tpa, "scope", None)
     task_name = scope.get("task_name") if isinstance(scope, dict) else None
-    if not isinstance(task_name, str) or task_name not in ALLOWED_TASKS:
+    if not isinstance(task_name, str) or task_name not in ALLOWED_TASKS or scope != {"task_name": task_name}:
         raise PermissionError("Task is not an allowlisted read-only diagnostic")
     verdict = authority_gate.validate(tpa)
     code = getattr(getattr(verdict, "code", None), "value", None)
@@ -47,7 +47,7 @@ def issue_signed_diagnostic(authority_gate, tpa, config_path: str | Path, signin
     action_id = getattr(tpa, "action_id", None)
     if not isinstance(action_id, str) or not action_id or len(action_id) > 96:
         raise PermissionError("Invalid authority action ID")
-    now = int(time.time())
+    if transport_scope not in {"local", "garcar-diagnostics-v1"}:\n        raise PermissionError("Unsupported diagnostic transport scope")\n    now = int(time.time())
     payload = {
         "version": 1,
         "directive_id": str(uuid.uuid4()),
@@ -58,7 +58,7 @@ def issue_signed_diagnostic(authority_gate, tpa, config_path: str | Path, signin
         "expires_at": now + 90,
         "mutating": False,
         "issuer": "garcar-gateway:" + action_id,
-        "scope": "local",
+        "scope": transport_scope,
     }
     signature = hmac.new(signing_key, _canonical(payload), hashlib.sha256).hexdigest()
     return {"payload": payload, "signature": signature}
