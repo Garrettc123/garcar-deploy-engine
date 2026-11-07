@@ -107,3 +107,45 @@ def test_worker_cannot_be_called_without_gateway_approval(tmp_path, monkeypatch)
     with pytest.raises(PermissionError):
         submit_authorized_diagnostic(gate, tpa, path, DISPATCH_KEY, RECEIPT_KEY, "https://worker.example.com")
     assert not called
+
+
+def test_gateway_receipt_recovery_never_posts_dispatch(tmp_path, monkeypatch):
+    from gateway import sovereign_transport as transport
+    path, tpa, gate = fixture(tmp_path)
+    env = issue_signed_diagnostic(gate, tpa, path, DISPATCH_KEY, transport_scope="garcar-diagnostics-v1")
+    original = make_result(env)
+    called = []
+
+    class Response:
+        status = 200
+        def read(self, size):
+            return _canonical(original)
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+
+    class Opener:
+        def open(self, request, timeout):
+            called.append(request.full_url)
+            assert timeout == 15
+            assert json.loads(request.data) == env
+            return Response()
+
+    monkeypatch.setattr(transport, "build_opener", lambda *_: Opener())
+    result = transport.recover_remote_receipt(env, RECEIPT_KEY, "https://worker.example.com")
+    assert result["state"] == "succeeded"
+    assert called == ["https://worker.example.com/v1/diagnostics/receipt"]
+
+
+def test_recovery_never_mislabels_missing_receipt_as_success(tmp_path, monkeypatch):
+    from gateway import sovereign_transport as transport
+    from urllib.error import HTTPError
+    path, tpa, gate = fixture(tmp_path)
+    env = issue_signed_diagnostic(gate, tpa, path, DISPATCH_KEY, transport_scope="garcar-diagnostics-v1")
+    class Opener:
+        def open(self, request, timeout):
+            raise HTTPError(request.full_url, 404, "not found", {}, None)
+    monkeypatch.setattr(transport, "build_opener", lambda *_: Opener())
+    with pytest.raises(transport.DiagnosticTransportError, match="outcome unknown"):
+        transport.recover_remote_receipt(env, RECEIPT_KEY, "https://worker.example.com")
