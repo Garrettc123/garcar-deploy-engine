@@ -48,3 +48,17 @@ The complete independent reference engine, dispatcher, GitHub inventory probe, a
 The standalone v3 worker and gateway-to-loopback-worker test suite ran locally: **53 tests passed**. The repository's GitHub Actions workflow was updated to run three test files, but current GitHub Actions attempts are marked FAILED with zero visible steps and unavailable job logs. Thus **repository CI has not been verified passing**. The existing Railway staging project has other pending changes; do not accept, discard or overwrite those changes as part of this PR.
 
 No production credentials, network endpoint, secret sharing, Railway service provisioning, or business/payment automation are included. Before a real staging run, review and implement TLS ingress, non-root isolation, a separately approved volume-backed worker, durable receipts and gateway access controls.
+
+
+## v4 durable receipt recovery contract
+
+Standalone v4 worker archive adds:
+- `POST /v1/diagnostics/receipt`: accepts an **original signed directive** to retrieve the original independently signed execution receipt, without replaying a command. Returns 404 when no result is available. The operation is explicitly read-only and retains dispatch replay rejection.
+- `GET /readyz`: validates writable storage and existing audit integrity; HTTP 503 blocks new dispatch. On Railway it additionally checks Linux `/proc/self/mountinfo` for a **real /data mountpoint**, not just a directory.
+- SQLite `signed_receipts` cache keyed by exact directive digest, co-located with replay ledger on the persistent volume.
+- Dockerfile healthcheck and `sovereign_client.recover_diagnostic`.
+- Full clean-extraction local test suite: **62 passing tests** (includes original engine and v4 worker tests).
+
+This PR also includes gateway `recover_remote_receipt(...)` with tests to verify it only calls the receipt-retrieval endpoint and rejects absent receipts as **unknown outcome**. It cannot recover after original authorization expires without a new reconciliation policy.
+
+**Not yet completed:** publishing the complete v4 worker source to a GitHub worker repository, provisioning a separate Railway worker and persisted volume, secure key injection, staging ingress, remote passkey-bound TPA integration, and independent GitHub CI verification. The current Actions failures have zero observed runner steps and unavailable logs; preserve this PR as draft.
