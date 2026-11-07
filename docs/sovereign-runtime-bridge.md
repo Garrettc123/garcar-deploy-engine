@@ -62,3 +62,24 @@ Standalone v4 worker archive adds:
 This PR also includes gateway `recover_remote_receipt(...)` with tests to verify it only calls the receipt-retrieval endpoint and rejects absent receipts as **unknown outcome**. It cannot recover after original authorization expires without a new reconciliation policy.
 
 **Not yet completed:** publishing the complete v4 worker source to a GitHub worker repository, provisioning a separate Railway worker and persisted volume, secure key injection, staging ingress, remote passkey-bound TPA integration, and independent GitHub CI verification. The current Actions failures have zero observed runner steps and unavailable logs; preserve this PR as draft.
+
+
+## v5 packaged-worker integrity and blocking source publication
+
+The standalone v5 reference archive `sovereign_execution_engine_v5.zip` was generated and validated locally, but **is not yet in this GitHub repository**.
+
+- ZIP SHA-256: `6089699bffe9a2b08917ec3681f48340f34f5e3b6e2633ca50f62c58afd2344e`
+- Full package: 22 tracked source/config/test files plus `SHA256_MANIFEST.json`.
+- Clean extraction + Python `unittest`: **66 passed**.
+- Added `sovereign_http.ledger_integrity`: SQLite `PRAGMA quick_check`, schema presence, completed-row receipt metadata, and ledger-to-audit file presence checks. `/readyz` now rejects unhealthy state, and receipt recovery refuses a previously signed success if audit/ledger integrity fails.
+- Added regression tests: corrupted SQLite, corrupted audit during receipt recovery, missing audit after prior completed execution, and readiness on a new worker.
+- No patch has been deployed to a remote worker. Zero Railway worker service/volume changes made.
+
+### Remaining hard blockers
+
+1. Publish the full worker source and tests on a reviewable branch or in a dedicated repository (the source archive is not automatically present in this GitHub PR).
+2. Resolve GitHub Actions runs that are reported failed with no available job steps/logs; CodeRabbit success does not satisfy executable CI.
+3. Provision an isolated worker and persistent Railway volume only after cost/approval and resolving pre-existing staged changes.
+4. Configure two independent signing keys through a secret manager, TLS-only ingress, and a live operator-authenticated AuthorityGate.
+5. Demonstrate remote restart/replay, receipt recovery and injected corruption handling, preserving signed evidence. Do not merge/deploy or enable payment/write tasks before release gates pass.
+
