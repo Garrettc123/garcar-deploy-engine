@@ -1,0 +1,12 @@
+# Staging-only, metadata-only Garcar mesh heartbeat canary.
+# This is NOT the business application or an autonomous command executor.
+# No secrets or payments are baked into the image.
+FROM python:3.12-slim-bookworm
+RUN useradd --create-home --uid 10001 mesh
+WORKDIR /app
+COPY mesh_heartbeat.py ./mesh_heartbeat.py
+COPY tests/test_mesh_heartbeat.py ./tests/test_mesh_heartbeat.py
+RUN python -m unittest discover -s tests -p test_mesh_heartbeat.py -v
+USER mesh
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+CMD ["python","mesh_heartbeat.py"]
