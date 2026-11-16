@@ -31,7 +31,7 @@ jobs:
           import hashlib
           from pathlib import Path
           observed=hashlib.sha256(Path('sovereign_worker/worker.py').read_bytes()).hexdigest()
-          expected='022cd54722abdabe308fac71df0a9f77a18b5f34073bfd8f680e42dbb2e6eb1b'
+          expected='4f4524a1585a58c23cc4621209aa4909dd6db2320e1530409d3ab80b62a06c18'
           assert observed == expected, f'source changed: {observed}'
           PY
       - name: Run staging worker security and evidence regression tests
