@@ -236,6 +236,13 @@ def main():
     while not STOP:
         try:
             result = cycle()
+            if result.get('reason') == 'grant_budget_exhausted':
+                # A signed finite grant is consumed: stop instead of paying to
+                # poll and log forever. No work is executed after this point.
+                print(json.dumps({'status': 'PAUSED_BUDGET_EXHAUSTED',
+                                  'reason': 'grant_budget_exhausted',
+                                  'executed': False}, sort_keys=True), flush=True)
+                return 0
             if result.get('executed') or result.get('reason') != 'not_due':
                 print(json.dumps(result, sort_keys=True), flush=True)
         except (RuntimeError, OSError, sqlite3.Error, ValueError, KeyError, subprocess.TimeoutExpired) as exc:
