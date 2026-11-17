@@ -21,15 +21,19 @@ Source: `registry/stack_release_staging.json`. Dependencies are a proposed relea
 
 The proposed `ueep-core` repo/AWS control-plane mapping was not found. No AWS deploy should be inferred.
 
-## Current verified drift
+## Reviewed CI-only branch descendant: not a deployment repin
 
-`garcar-payments` staging is pinned to `ea4de1f55275e18d52c3742f543eebfce4093e28`; the branch head advanced to `cb87ff7a1c7ef2e1a1c4d8f23590d2fb6d48b2fa`. GitHub comparison reports **one commit ahead, changing only `.github/workflows/ci.yml`**; it does not by itself prove a runtime change, but it fails strict source-head equality. Preserve the deployed SHA until the newer workflow commit is independently reviewed. Do not silently move the pin.
+`garcar-payments` staging remains pinned to `ea4de1f55275e18d52c3742f543eebfce4093e28`; branch HEAD is `cb87ff7a1c7ef2e1a1c4d8f23590d2fb6d48b2fa`. I independently inspected the exact GitHub comparison and old/new file contents. The single descendant commit modifies only `.github/workflows/ci.yml`; it broadens CI trigger branches and Python file paths while preserving the test job, read-only `contents: read` permission, and test command. It is **not** a runtime change and **does not modify the deployed SHA**.
+
+The manifest records only this specific immutable descendant and the exact CI workflow path. On every GitHub source verification, the checker re-fetches the public branch HEAD and the GitHub compare API and requires: HEAD equals the exact reviewed SHA; exactly one commit ahead; zero commits behind; merge base equals deployed SHA; exactly one changed file, `.github/workflows/ci.yml`, with status `modified`. Otherwise it reports `drift` or `unavailable` and fails closed. For this one check, `github_check_status=reviewed_ci_only` is acceptable **source-review evidence**, but `github_head_matches_pin=false` and `all_heads_match_pinned_sha=false` remain truthful.
+
+No exception applies to future commits, any other file, or any other service. This review is not release authorization, an application canary, or evidence the service was redeployed.
 
 ## GitHub Actions source-access boundary
 
 The staging manifest maps **five private repositories**: `garcar-enterprise-sync-core`, `rhns-agent-core`, `garcar-product-factory`, `garcar-revenue-os` (used by two services). The deploy-engine repository's ephemeral GitHub Actions token cannot inspect their refs; a 404 in that job is **source access unavailable**, not proof of source drift. The read-only preflight fails closed and reports `github_check_status=unavailable`. These private source pins **were separately checked** via the connected GitHub app when this draft was prepared, but that is point-in-time evidence rather than permission for the CI workflow.
 
-Public `garcar-payments` is an actual `github_check_status=drift` because its branch HEAD differs from the recorded deployed SHA by one workflow-only commit. Any all-stack promotion remains blocked. Do not create or expose personal access tokens solely to make this check green.
+The one public payments descendant is now reviewed through the immutable CI-only comparison policy. The five entries for private repositories remain `github_check_status=unavailable` in the repository-scoped Actions job; the aggregate source review therefore **still fails closed**. No full-stack promotion is authorized. Do not create or expose personal access tokens solely to make this check green.
 
 ## Termux / Linux read-only commands
 
@@ -39,7 +43,7 @@ python3 scripts/stack_release_preflight.py --output /tmp/garcar-stack-plan.json
 python3 scripts/stack_release_preflight.py --verify-github --output /tmp/garcar-stack-pin-check.json
 ```
 
-The second command validates the local manifest. The third checks actual public GitHub branch HEADs and **exits 2 on drift or read errors**; it is expected to show the payment source mismatch until reconciled. The report always states `release_action=NONE`, `deployment_performed=false`, and `ready_to_promote=false`. No downloaded source is executed and no credentials are requested.
+The second command validates the local manifest. The third checks public GitHub branch HEADs and, for the single reviewed payments exception, its exact diff ancestry; it **exits 2 on unreviewed drift or read errors**. Because five service entries reference private repositories, a public-only runner is still expected to fail with their source access `unavailable` rather than inventing a pass. The report always states `release_action=NONE`, `deployment_performed=false`, and `ready_to_promote=false`. No downloaded source is executed and no credentials are requested.
 
 ## Before any real deployment
 
