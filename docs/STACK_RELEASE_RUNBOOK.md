@@ -25,6 +25,12 @@ The proposed `ueep-core` repo/AWS control-plane mapping was not found. No AWS de
 
 `garcar-payments` staging is pinned to `ea4de1f55275e18d52c3742f543eebfce4093e28`; the branch head advanced to `cb87ff7a1c7ef2e1a1c4d8f23590d2fb6d48b2fa`. GitHub comparison reports **one commit ahead, changing only `.github/workflows/ci.yml`**; it does not by itself prove a runtime change, but it fails strict source-head equality. Preserve the deployed SHA until the newer workflow commit is independently reviewed. Do not silently move the pin.
 
+## GitHub Actions source-access boundary
+
+The staging manifest maps **five private repositories**: `garcar-enterprise-sync-core`, `rhns-agent-core`, `garcar-product-factory`, `garcar-revenue-os` (used by two services). The deploy-engine repository's ephemeral GitHub Actions token cannot inspect their refs; a 404 in that job is **source access unavailable**, not proof of source drift. The read-only preflight fails closed and reports `github_check_status=unavailable`. These private source pins **were separately checked** via the connected GitHub app when this draft was prepared, but that is point-in-time evidence rather than permission for the CI workflow.
+
+Public `garcar-payments` is an actual `github_check_status=drift` because its branch HEAD differs from the recorded deployed SHA by one workflow-only commit. Any all-stack promotion remains blocked. Do not create or expose personal access tokens solely to make this check green.
+
 ## Termux / Linux read-only commands
 
 ```bash
