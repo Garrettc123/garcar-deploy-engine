@@ -62,6 +62,18 @@ def ordered_services(data: dict) -> list[dict]:
             raise PreflightError("Invalid Git branch")
         if not SHA.fullmatch(str(item.get("sha", ""))):
             raise PreflightError("Missing exact SHA")
+        reviewed_head = item.get("reviewed_ci_head_sha")
+        reviewed_paths = item.get("reviewed_ci_paths")
+        if reviewed_head is not None or reviewed_paths is not None:
+            # Exception is narrowly limited to one independently inspected
+            # CI-only commit. It cannot approve application source changes.
+            if (
+                item["repo"] != "Garrettc123/garcar-payments"
+                or item["sha"] != "ea4de1f55275e18d52c3742f543eebfce4093e28"
+                or reviewed_head != "cb87ff7a1c7ef2e1a1c4d8f23590d2fb6d48b2fa"
+                or reviewed_paths != [".github/workflows/ci.yml"]
+            ):
+                raise PreflightError("Unreviewed CI-only source exception")
         tier = item.get("tier")
         if type(tier) is not int or tier not in (1, 2, 3, 4):
             raise PreflightError("Invalid tier")
@@ -99,20 +111,56 @@ def ordered_services(data: dict) -> list[dict]:
     return ordered
 
 
-def get_public_head(repo: str, branch: str) -> str:
-    url = "https://api.github.com/repos/" + repo + "/git/ref/heads/" + quote(branch, safe="/")
-    # GitHub-hosted runners share anonymous API limits. Use the job's
-    # ephemeral, read-only GITHUB_TOKEN when available. Never print it.
+def _github_json(url: str) -> dict:
+    # Scoped Actions tokens only see this repo and public resources.
+    # Private repo lookups remain unavailable, never silently accepted.
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "garcar-release-read-only"}
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     if token:
         headers["Authorization"] = "Bearer " + token
     request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=15) as response:
-        return str(json.load(response).get("object", {}).get("sha") or "")
+        return json.load(response)
 
 
-def preflight(data: dict, *, verify_github: bool = False, resolver=get_public_head) -> tuple[dict, bool]:
+def get_public_head(repo: str, branch: str) -> str:
+    url = "https://api.github.com/repos/" + repo + "/git/ref/heads/" + quote(branch, safe="/")
+    return str(_github_json(url).get("object", {}).get("sha") or "")
+
+
+def get_public_compare(repo: str, base: str, head: str) -> dict:
+    # Both full SHAs and repository identities were validated in the manifest.
+    url = "https://api.github.com/repos/" + repo + "/compare/" + base + "..." + head
+    return _github_json(url)
+
+
+def _reviewed_ci_only_change(item: dict, head: str, compare_resolver) -> bool:
+    if head != item.get("reviewed_ci_head_sha"):
+        return False
+    delta = compare_resolver(item["repo"], item["sha"], head)
+    if not isinstance(delta, dict):
+        return False
+    files = delta.get("files")
+    base = delta.get("merge_base_commit")
+    return (
+        delta.get("status") == "ahead"
+        and delta.get("ahead_by") == 1
+        and delta.get("behind_by") == 0
+        and delta.get("total_commits") == 1
+        and isinstance(base, dict)
+        and base.get("sha") == item["sha"]
+        and isinstance(files, list)
+        and len(files) == 1
+        and files[0].get("filename") == ".github/workflows/ci.yml"
+        and files[0].get("status") == "modified"
+        and item.get("reviewed_ci_paths") == [".github/workflows/ci.yml"]
+    )
+
+
+def preflight(
+    data: dict, *, verify_github: bool = False,
+    resolver=get_public_head, compare_resolver=get_public_compare,
+) -> tuple[dict, bool]:
     records = []
     good = True
     for item in ordered_services(data):
@@ -128,7 +176,15 @@ def preflight(data: dict, *, verify_github: bool = False, resolver=get_public_he
                 head = resolver(item["repo"], item["branch"])
                 result["current_github_head"] = head if SHA.fullmatch(head) else None
                 result["github_head_matches_pin"] = head == item["sha"]
-                result["github_check_status"] = "verified" if head == item["sha"] else "drift"
+                if head == item["sha"]:
+                    result["github_check_status"] = "verified"
+                elif _reviewed_ci_only_change(item, head, compare_resolver):
+                    # Deployed application SHA stays unchanged; the reviewed
+                    # branch descendant changes only CI trigger configuration.
+                    result["github_check_status"] = "reviewed_ci_only"
+                    result["reviewed_ci_head_sha"] = head
+                else:
+                    result["github_check_status"] = "drift"
             except urllib.error.HTTPError as exc:
                 # HTTP 404 for a private repo means this scoped CI token cannot
                 # inspect it; do not falsely label the revision a mismatch.
@@ -138,13 +194,17 @@ def preflight(data: dict, *, verify_github: bool = False, resolver=get_public_he
             except (OSError, urllib.error.URLError, TimeoutError, ValueError) as exc:
                 result["github_check_status"] = "unavailable"
                 result["github_error_type"] = type(exc).__name__
-            good = good and result["github_head_matches_pin"] is True
+            good = good and result["github_check_status"] in ("verified", "reviewed_ci_only")
         records.append(result)
     report = {
         "schema_version": 1, "project_id": data["project_id"],
         "environment_id": data["environment_id"], "environment": data["environment"],
         "release_action": "NONE", "deployment_performed": False,
-        "github_checked": verify_github, "all_heads_match_pinned_sha": good if verify_github else None,
+        "github_checked": verify_github,
+        "all_heads_match_pinned_sha": (
+            all(x["github_head_matches_pin"] is True for x in records) if verify_github else None
+        ),
+        "source_review_policy_satisfied": good if verify_github else None,
         "ready_to_promote": False, "services": records,
         "external_prerequisites": data["external_prerequisites"],
         "unverified_tiers": data["unverified_tiers"],
