@@ -43,6 +43,22 @@ class StackReleasePreflightTests(unittest.TestCase):
         self.assertFalse(good)
         self.assertFalse(report["all_heads_match_pinned_sha"])
 
+    def test_access_unavailable_is_not_mislabeled_as_drift(self):
+        from urllib.error import HTTPError
+        def denied(*_):
+            raise HTTPError("https://api.github.com", 404, "Not Found", {}, None)
+        report, good = MOD.preflight(DATA, verify_github=True, resolver=denied)
+        self.assertFalse(good)
+        self.assertFalse(report["all_heads_match_pinned_sha"])
+        self.assertTrue(all(row["github_check_status"] == "unavailable" for row in report["services"]))
+        self.assertTrue(all(row["github_head_matches_pin"] is None for row in report["services"]))
+        self.assertTrue(all(row["github_http_status"] == 404 for row in report["services"]))
+
+    def test_real_sha_difference_is_classified_as_drift(self):
+        report, good = MOD.preflight(DATA, verify_github=True, resolver=lambda *_: "0" * 40)
+        self.assertFalse(good)
+        self.assertTrue(all(row["github_check_status"] == "drift" for row in report["services"]))
+
     def test_production_scope_is_rejected(self):
         invalid = copy.deepcopy(DATA)
         invalid["environment"] = "production"
