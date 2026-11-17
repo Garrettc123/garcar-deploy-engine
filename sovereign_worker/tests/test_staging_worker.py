@@ -145,4 +145,22 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(worker.cycle()['executed'])
         self.assertEqual(worker.cycle(),{'executed':False,'reason':'grant_budget_exhausted'})
 
+    def test_exhausted_grant_stops_worker_without_polling_forever(self):
+        self.make_grant(max_total_runs=1)
+        self.assertTrue(worker.cycle()['executed'])
+        with patch.object(worker, 'STOP', False), \
+             patch.object(worker.signal, 'signal'), \
+             patch.object(worker.time, 'sleep', side_effect=AssertionError('must not poll')):
+            self.assertEqual(worker.main(), 0)
+        with sqlite3.connect(worker.DB) as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM runs').fetchone()[0], 1)
+
+    def test_expired_grant_remains_fail_closed_after_budget_change(self):
+        now = int(time.time())
+        self.make_grant(issued_at=now-150, expires_at=now-1)
+        with patch.object(worker, 'STOP', False), \
+             patch.object(worker.signal, 'signal'), \
+             patch.object(worker.time, 'sleep', side_effect=AssertionError('must not poll')):
+            self.assertEqual(worker.main(), 3)
+
 if __name__=='__main__': unittest.main()

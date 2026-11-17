@@ -7,7 +7,7 @@ RUN apt-get update \
 WORKDIR /app
 COPY sovereign_worker/worker.py /app/worker.py
 COPY sovereign_worker/bootstrap.py /app/bootstrap.py
-RUN python -c "import hashlib,pathlib; p=pathlib.Path('/app/worker.py'); assert hashlib.sha256(p.read_bytes()).hexdigest()=='022cd54722abdabe308fac71df0a9f77a18b5f34073bfd8f680e42dbb2e6eb1b', 'worker source digest mismatch'"
+RUN python -c "import hashlib,pathlib; p=pathlib.Path('/app/worker.py'); assert hashlib.sha256(p.read_bytes()).hexdigest()=='4f4524a1585a58c23cc4621209aa4909dd6db2320e1530409d3ab80b62a06c18', 'worker source digest mismatch'"
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 USER root
 ENTRYPOINT ["python", "-u", "/app/bootstrap.py"]
