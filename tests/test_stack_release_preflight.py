@@ -59,6 +59,69 @@ class StackReleasePreflightTests(unittest.TestCase):
         self.assertFalse(good)
         self.assertTrue(all(row["github_check_status"] == "drift" for row in report["services"]))
 
+    def _reviewed_comparison(self, *, files=None, status="ahead", ahead=1, behind=0):
+        return {
+            "status": status, "ahead_by": ahead, "behind_by": behind,
+            "total_commits": 1,
+            "merge_base_commit": {"sha": "ea4de1f55275e18d52c3742f543eebfce4093e28"},
+            "files": files if files is not None else [
+                {"filename": ".github/workflows/ci.yml", "status": "modified"}
+            ],
+        }
+
+    def _payment_head(self, repo, branch):
+        row = next(x for x in DATA["services"] if x["repo"] == repo and x["branch"] == branch)
+        return row.get("reviewed_ci_head_sha") or row["sha"]
+
+    def test_exact_ci_only_descendant_is_reviewed_without_repin(self):
+        report, good = MOD.preflight(
+            DATA, verify_github=True, resolver=self._payment_head,
+            compare_resolver=lambda *_: self._reviewed_comparison(),
+        )
+        self.assertTrue(good)
+        self.assertFalse(report["all_heads_match_pinned_sha"])
+        self.assertTrue(report["source_review_policy_satisfied"])
+        self.assertFalse(report["ready_to_promote"])
+        payment = next(x for x in report["services"] if x["id"] == "payments")
+        self.assertEqual(payment["github_check_status"], "reviewed_ci_only")
+        self.assertFalse(payment["github_head_matches_pin"])
+        self.assertEqual(payment["expected_deployed_sha"], "ea4de1f55275e18d52c3742f543eebfce4093e28")
+
+    def test_ci_only_exception_rejects_application_change(self):
+        report, good = MOD.preflight(
+            DATA, verify_github=True, resolver=self._payment_head,
+            compare_resolver=lambda *_: self._reviewed_comparison(files=[
+                {"filename": "backend/payments.py", "status": "modified"}]),
+        )
+        self.assertFalse(good)
+        payment = next(x for x in report["services"] if x["id"] == "payments")
+        self.assertEqual(payment["github_check_status"], "drift")
+
+    def test_ci_only_exception_rejects_two_unreviewed_commits(self):
+        report, good = MOD.preflight(
+            DATA, verify_github=True, resolver=self._payment_head,
+            compare_resolver=lambda *_: self._reviewed_comparison(ahead=2),
+        )
+        self.assertFalse(good)
+        payment = next(x for x in report["services"] if x["id"] == "payments")
+        self.assertEqual(payment["github_check_status"], "drift")
+
+    def test_ci_only_exception_rejects_wrong_source_manifest(self):
+        changed = copy.deepcopy(DATA)
+        payment = next(x for x in changed["services"] if x["id"] == "payments")
+        payment["reviewed_ci_head_sha"] = "0" * 40
+        with self.assertRaises(MOD.PreflightError):
+            MOD.ordered_services(changed)
+
+    def test_ci_only_exception_rejects_wrong_service(self):
+        changed = copy.deepcopy(DATA)
+        payment = next(x for x in changed["services"] if x["id"] == "payments")
+        row = next(x for x in changed["services"] if x["id"] == "mars")
+        row["reviewed_ci_head_sha"] = payment["reviewed_ci_head_sha"]
+        row["reviewed_ci_paths"] = payment["reviewed_ci_paths"]
+        with self.assertRaises(MOD.PreflightError):
+            MOD.ordered_services(changed)
+
     def test_production_scope_is_rejected(self):
         invalid = copy.deepcopy(DATA)
         invalid["environment"] = "production"
