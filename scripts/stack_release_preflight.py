@@ -120,19 +120,23 @@ def preflight(data: dict, *, verify_github: bool = False, resolver=get_public_he
             "tier": item["tier"], "id": item["id"], "service_name": item["service_name"],
             "service_id": item["service_id"], "repo": item["repo"], "branch": item["branch"],
             "expected_deployed_sha": item["sha"], "depends_on": item["depends_on"],
-            "github_head_matches_pin": None, "runtime_ready": False,
+            "github_head_matches_pin": None, "github_check_status": "not_checked",
+            "runtime_ready": False,
         }
         if verify_github:
             try:
                 head = resolver(item["repo"], item["branch"])
                 result["current_github_head"] = head if SHA.fullmatch(head) else None
                 result["github_head_matches_pin"] = head == item["sha"]
+                result["github_check_status"] = "verified" if head == item["sha"] else "drift"
             except urllib.error.HTTPError as exc:
-                result["github_head_matches_pin"] = False
+                # HTTP 404 for a private repo means this scoped CI token cannot
+                # inspect it; do not falsely label the revision a mismatch.
+                result["github_check_status"] = "unavailable"
                 result["github_error_type"] = "HTTPError"
                 result["github_http_status"] = int(exc.code)
             except (OSError, urllib.error.URLError, TimeoutError, ValueError) as exc:
-                result["github_head_matches_pin"] = False
+                result["github_check_status"] = "unavailable"
                 result["github_error_type"] = type(exc).__name__
             good = good and result["github_head_matches_pin"] is True
         records.append(result)
