@@ -151,6 +151,7 @@ def _reviewed_ci_only_change(item: dict, head: str, compare_resolver) -> bool:
         and base.get("sha") == item["sha"]
         and isinstance(files, list)
         and len(files) == 1
+        and isinstance(files[0], dict)
         and files[0].get("filename") == ".github/workflows/ci.yml"
         and files[0].get("status") == "modified"
         and item.get("reviewed_ci_paths") == [".github/workflows/ci.yml"]
