@@ -109,6 +109,10 @@
       "sha": "ea4de1f55275e18d52c3742f543eebfce4093e28",
       "depends_on": [
         "rhns"
+      ],
+      "reviewed_ci_head_sha": "cb87ff7a1c7ef2e1a1c4d8f23590d2fb6d48b2fa",
+      "reviewed_ci_paths": [
+        ".github/workflows/ci.yml"
       ]
     },
     {
