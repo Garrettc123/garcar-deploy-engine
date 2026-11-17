@@ -1,0 +1,42 @@
+name: Verify actual Garcar staging release pins
+on:
+  pull_request:
+    paths:
+      - 'registry/stack_release_staging.json'
+      - 'scripts/stack_release_preflight.py'
+      - 'tests/test_stack_release_preflight.py'
+      - 'docs/STACK_RELEASE_RUNBOOK.md'
+      - '.github/workflows/stack-release-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and test fail-closed release policy
+        run: |
+          python -m py_compile scripts/stack_release_preflight.py tests/test_stack_release_preflight.py
+          python -m unittest discover -s tests -p 'test_stack_release_preflight.py' -v
+      - name: Validate offline release order and generate plan
+        run: python scripts/stack_release_preflight.py --output /tmp/garcar-stack-plan.json
+  source-pin-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify real public GitHub branch HEADs
+        run: |
+          python scripts/stack_release_preflight.py --verify-github --output /tmp/garcar-stack-pin-check.json || { cat /tmp/garcar-stack-pin-check.json; exit 2; }
