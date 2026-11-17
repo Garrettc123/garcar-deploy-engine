@@ -147,3 +147,53 @@ def test_privileged_executor_allows_authorized_verdict():
     executor = PrivilegedExecutor(Provider())
     verdict = Verdict('act_1', 'AUTHORIZED', VerdictCode.AUTHORIZED, 'all checks passed', {}, {'action_id': 'act_1'})
     assert executor.execute(verdict) == {'executed': True, 'action_id': 'act_1'}
+
+
+def test_unknown_action_class_rejected():
+    world = World()
+    tpa = TPA(**{**valid_tpa(world).__dict__, 'action_class': 'EXECUTE_ANYTHING'})
+    verdict = AuthorityGate(world, Sessions()).validate(tpa)
+    assert verdict.code is VerdictCode.SCOPE_EXCEEDED
+
+
+def test_unknown_action_not_dispatched():
+    world = World()
+    tpa = TPA(**{**valid_tpa(world).__dict__, 'action_class': 'SHELL'})
+    verdict = AuthorityGate(world, Sessions()).validate(tpa)
+    assert verdict.verdict == 'REJECTED'
+
+
+def test_diagnostic_must_be_registered_readonly():
+    world = World()
+    base = valid_tpa(world).__dict__
+    for scope, reversibility in (
+        ({'task_name': 'deploy_prod'}, 'reversible'),
+        ({'task_name': 'environment_check', 'argv': ['sh']}, 'reversible'),
+        ({'task_name': 'environment_check'}, 'irreversible'),
+    ):
+        tpa = TPA(**{**base, 'action_class': 'SOVEREIGN_DIAGNOSTIC', 'scope': scope,
+                     'reversibility': reversibility})
+        assert AuthorityGate(world, Sessions()).validate(tpa).code is VerdictCode.SCOPE_EXCEEDED
+
+
+def test_readonly_diagnostic_permitted_after_identity_and_state_checks():
+    world = World()
+    tpa = TPA(**{**valid_tpa(world).__dict__, 'action_class': 'SOVEREIGN_DIAGNOSTIC',
+                 'scope': {'task_name': 'environment_check'}})
+    verdict = AuthorityGate(world, Sessions()).validate(tpa)
+    assert verdict.code is VerdictCode.AUTHORIZED
+
+
+def test_nan_and_infinite_confidence_rejected():
+    world = World()
+    for value in (float('nan'), float('inf'), float('-inf'), True, 1.01, -0.1):
+        tpa = TPA(**{**valid_tpa(world).__dict__, 'confidence': value})
+        assert AuthorityGate(world, Sessions()).validate(tpa).code is VerdictCode.LOW_CONFIDENCE
+
+
+def test_bad_charge_amount_rejected():
+    world = World()
+    for amount in (-1, 0, '10', 2.5, True):
+        tpa = TPA(**{**valid_tpa(world).__dict__, 'action_class': 'STRIPE_CHARGE',
+                     'scope': {'amount': amount}})
+        assert AuthorityGate(world, Sessions()).validate(tpa).code is VerdictCode.SCOPE_EXCEEDED

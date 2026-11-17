@@ -67,6 +67,23 @@ class AuthorityGate:
         def reject(code: VerdictCode, reason: str) -> Verdict:
             return Verdict(tpa.action_id, 'REJECTED', code, reason, dict(checks), tpa.__dict__)
 
+        # Fail closed for unknown action classes: prior code silently accepted them.
+        supported = {'STRIPE_CHARGE', 'DEPLOYMENT', 'CONTRACT_SEND', 'SOVEREIGN_DIAGNOSTIC'}
+        if tpa.action_class not in supported:
+            checks['scope'] = 'FAIL'
+            return reject(VerdictCode.SCOPE_EXCEEDED, 'unrecognized action class')
+        if tpa.action_class == 'SOVEREIGN_DIAGNOSTIC':
+            # No arbitrary commands, extra scope keys, or irreversible diagnostic directives.
+            if (tpa.scope not in ({'task_name': 'environment_check'}, {'task_name': 'repository_status'})
+                    or tpa.reversibility != 'reversible'):
+                checks['scope'] = 'FAIL'
+                return reject(VerdictCode.SCOPE_EXCEEDED, 'diagnostic task or reversibility not permitted')
+        if tpa.action_class == 'STRIPE_CHARGE':
+            amount = tpa.scope.get('amount') if isinstance(tpa.scope, dict) else None
+            if type(amount) is not int or amount <= 0:
+                checks['scope'] = 'FAIL'
+                return reject(VerdictCode.SCOPE_EXCEEDED, 'charge amount must be positive integer cents')
+
         parts = tpa.requested_by.split('::', 1)
         agent_id = parts[0]
         session_id = parts[1] if len(parts) == 2 else ''
@@ -107,7 +124,10 @@ class AuthorityGate:
         checks['destination'] = 'PASS'
 
         floor = CONFIDENCE_FLOOR.get(tpa.reversibility, 1.0)
-        if tpa.confidence < floor:
+        import math
+        confidence = tpa.confidence
+        if (type(confidence) not in (int, float) or not math.isfinite(confidence)
+                or not 0.0 <= confidence <= 1.0 or confidence < floor):
             checks['confidence'] = 'FAIL'
             return reject(VerdictCode.LOW_CONFIDENCE, 'confidence is below policy floor')
         checks['confidence'] = 'PASS'
