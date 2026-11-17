@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "release_mode": "read_only_preflight",
+  "project_name": "garcar-review-staging",
+  "project_id": "a8fd2149-530e-4b72-8e4b-131526f9452d",
+  "environment": "staging",
+  "environment_id": "9366cd82-91ab-42e7-8da9-8fc9cde07638",
+  "external_prerequisites": [
+    {
+      "id": "redis",
+      "name": "Redis",
+      "service_id": "53bee34b-d437-43ab-8183-34b5f161df24",
+      "verification": "runtime_dependency_probe_required"
+    }
+  ],
+  "services": [
+    {
+      "id": "mesh-sync",
+      "tier": 1,
+      "service_name": "garcar-mesh-sync-core-canary",
+      "service_id": "62832f35-2a5f-467b-92ec-b80153323877",
+      "repo": "Garrettc123/garcar-enterprise-sync-core",
+      "branch": "feature/governed-task-plane-20261112",
+      "sha": "2d0ceede494c93027dbd0a8cade36d3e323da0b5",
+      "depends_on": [
+        "redis"
+      ]
+    },
+    {
+      "id": "deploy-engine",
+      "tier": 1,
+      "service_name": "garcar-mesh-deploy-engine-canary",
+      "service_id": "900c412d-d6b7-4a53-a43e-b39b8eb6c536",
+      "repo": "Garrettc123/garcar-deploy-engine",
+      "branch": "feat/mesh-signed-node-20261111",
+      "sha": "d6b130dc390c78c03fd9892f157826a146d6abf2",
+      "depends_on": [
+        "mesh-sync"
+      ]
+    },
+    {
+      "id": "rhns",
+      "tier": 2,
+      "service_name": "garcar-mesh-rhns-canary",
+      "service_id": "0c37e56d-ba7d-4e2f-8aa6-a98e1b1a16a3",
+      "repo": "Garrettc123/rhns-agent-core",
+      "branch": "feature/read-only-task-worker-20261112",
+      "sha": "8e56903e17042a3685ca6c63e451d54489cb28c0",
+      "depends_on": [
+        "mesh-sync",
+        "deploy-engine"
+      ]
+    },
+    {
+      "id": "mars",
+      "tier": 2,
+      "service_name": "garcar-mesh-mars-canary",
+      "service_id": "66f2003d-cb17-440e-9fb6-02b2f1eeeda8",
+      "repo": "Garrettc123/mars-api",
+      "branch": "feat/mars-staging-mesh-canary-20261111",
+      "sha": "429ad12f9bce19e442a652bdddbb35c93a3d859c",
+      "depends_on": [
+        "rhns"
+      ]
+    },
+    {
+      "id": "neural",
+      "tier": 2,
+      "service_name": "garcar-mesh-neural-canary",
+      "service_id": "0e6107f0-5a8a-41b5-8dcd-5db8b7da6896",
+      "repo": "Garrettc123/neural-mesh",
+      "branch": "feat/neural-mesh-staging-canary-20261111",
+      "sha": "2ea048e70958bbcefa9e7336dad43450e6d09d3c",
+      "depends_on": [
+        "rhns"
+      ]
+    },
+    {
+      "id": "titan",
+      "tier": 2,
+      "service_name": "garcar-mesh-titan-canary",
+      "service_id": "a26aa89c-0c44-45ce-8819-3dae9de593f0",
+      "repo": "Garrettc123/TITAN-Autonomous-Business-Empire",
+      "branch": "feat/titan-staging-mesh-canary-20261111",
+      "sha": "d5022bfa8605d9892797c8c8941d7cc4da89f20a",
+      "depends_on": [
+        "rhns"
+      ]
+    },
+    {
+      "id": "nwu",
+      "tier": 2,
+      "service_name": "garcar-mesh-nwu-canary",
+      "service_id": "2f67a95a-73b6-4959-be1f-5346b969837b",
+      "repo": "Garrettc123/nwu-protocol",
+      "branch": "feat/nwu-staging-mesh-canary-20261111",
+      "sha": "8f9a32fab0f1ef865bb737b680149b3c7d8b36c8",
+      "depends_on": [
+        "rhns"
+      ]
+    },
+    {
+      "id": "payments",
+      "tier": 2,
+      "service_name": "garcar-mesh-payments-canary",
+      "service_id": "d3564a2a-7fda-464d-a74a-45da99c1587a",
+      "repo": "Garrettc123/garcar-payments",
+      "branch": "feat/payments-staging-mesh-canary-20261111",
+      "sha": "ea4de1f55275e18d52c3742f543eebfce4093e28",
+      "depends_on": [
+        "rhns"
+      ],
+      "reviewed_ci_head_sha": "cb87ff7a1c7ef2e1a1c4d8f23590d2fb6d48b2fa",
+      "reviewed_ci_paths": [
+        ".github/workflows/ci.yml"
+      ]
+    },
+    {
+      "id": "factory",
+      "tier": 2,
+      "service_name": "garcar-mesh-product-factory-canary",
+      "service_id": "8639d937-00ff-4758-a2ee-4530cb0b18f0",
+      "repo": "Garrettc123/garcar-product-factory",
+      "branch": "feat/product-factory-staging-mesh-canary-20261111",
+      "sha": "c60b5dfb820139cc5df33efc962809294150f7b0",
+      "depends_on": [
+        "rhns"
+      ]
+    },
+    {
+      "id": "revenue",
+      "tier": 2,
+      "service_name": "garcar-mesh-revenue-canary",
+      "service_id": "eabf6475-4f93-4cd5-91da-bfad1dc846e5",
+      "repo": "Garrettc123/garcar-revenue-os",
+      "branch": "feat/mesh-revenue-canary-20261111",
+      "sha": "4a7859abcd226105ae787f84d9b97ad0a66e3a24",
+      "depends_on": [
+        "rhns",
+        "payments",
+        "factory"
+      ]
+    },
+    {
+      "id": "review-ui",
+      "tier": 4,
+      "service_name": "review-workspace-sandbox",
+      "service_id": "feb44ff0-876f-4e6e-8d27-6b079fe417b3",
+      "repo": "Garrettc123/garcar-revenue-os",
+      "branch": "fix/review-persistent-staging-bootstrap-20261114",
+      "sha": "a1655d28a8a49f2e871d5aeb0e4510a474388d7c",
+      "depends_on": [
+        "revenue"
+      ]
+    }
+  ],
+  "unverified_tiers": [
+    {
+      "name": "AWS/UEEP",
+      "reason": "ueep-core, AWS account, signed workflow and migration mapping unverified"
+    },
+    {
+      "name": "Eve kernel",
+      "reason": "Private eve-chat-template exists, but host, PM2 process, database and readiness unverified"
+    },
+    {
+      "name": "Contractor lead UI",
+      "reason": "contractor-lead-recovery repository was not found; canonical UI mapping remains separate"
+    },
+    {
+      "name": "Sovereign staging worker",
+      "reason": "Separate sovereign-autonomy-worker deployment is CRASHED and signed operator grant must not be bypassed"
+    },
+    {
+      "name": "Live payments",
+      "reason": "Emergency payment receiver PRs unmerged; real Stripe delivery and fulfillment unverified"
+    }
+  ]
+}
