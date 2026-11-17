@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -100,9 +101,13 @@ def ordered_services(data: dict) -> list[dict]:
 
 def get_public_head(repo: str, branch: str) -> str:
     url = "https://api.github.com/repos/" + repo + "/git/ref/heads/" + quote(branch, safe="/")
-    request = urllib.request.Request(
-        url, headers={"Accept": "application/vnd.github+json", "User-Agent": "garcar-release-read-only"}
-    )
+    # GitHub-hosted runners share anonymous API limits. Use the job's
+    # ephemeral, read-only GITHUB_TOKEN when available. Never print it.
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "garcar-release-read-only"}
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=15) as response:
         return str(json.load(response).get("object", {}).get("sha") or "")
 
@@ -122,6 +127,10 @@ def preflight(data: dict, *, verify_github: bool = False, resolver=get_public_he
                 head = resolver(item["repo"], item["branch"])
                 result["current_github_head"] = head if SHA.fullmatch(head) else None
                 result["github_head_matches_pin"] = head == item["sha"]
+            except urllib.error.HTTPError as exc:
+                result["github_head_matches_pin"] = False
+                result["github_error_type"] = "HTTPError"
+                result["github_http_status"] = int(exc.code)
             except (OSError, urllib.error.URLError, TimeoutError, ValueError) as exc:
                 result["github_head_matches_pin"] = False
                 result["github_error_type"] = type(exc).__name__
